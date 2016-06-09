@@ -778,10 +778,11 @@ struct nk_thread *rt_need_resched()
 
 static int check_deadlines(rt_thread *t)
 {
-	rt_thread_dump(t);
     if (t->exit_time > t->deadline) {
         RT_SCHED_ERROR("Missed Deadline = %llu\t\t Current Timer = %llu\n", t->deadline, t->exit_time);
         RT_SCHED_ERROR("Difference =  %llu\n", t->exit_time - t->deadline);
+		
+		rt_thread_dump(t);
 		return 1;
     }
     return 0;
@@ -929,13 +930,13 @@ static void test_real_time(void *in)
 {
     while (1)
     {
-        udelay(1000000);
+		printk("Inside thread %d\n", *(int *)in);
+        udelay(10000000);
     }
 }
 
 void rt_start(uint64_t sched_slice_time, uint64_t sched_period) {
     nk_thread_id_t sched;
-    
     rt_constraints *constraints_first = (rt_constraints *)malloc(sizeof(rt_constraints));
     struct periodic_constraints per_constr_first = {sched_period, sched_slice_time};
     constraints_first->periodic = per_constr_first;
@@ -944,6 +945,13 @@ void rt_start(uint64_t sched_slice_time, uint64_t sched_period) {
 }
 
 static void sched_sim(void *scheduler) {
+	nk_thread_id_t v;	
+	int five = 5;
+	rt_constraints *constraints_fifth = (rt_constraints *)malloc(sizeof(rt_constraints));
+    struct periodic_constraints per_constr_fifth = {(5000000), (500000)};
+    constraints_fifth->periodic = per_constr_fifth;
+	
+    nk_thread_start_sim((nk_thread_fun_t)test_real_time, (void *)five, NULL, 0, 0, &v, my_cpu_id(), PERIODIC, constraints_fifth, 0);
 	while (1) {
 		printk("Running the scheduler on core %d\n", my_cpu_id());
 		udelay(100000);
@@ -1250,7 +1258,7 @@ void nk_rt_test()
     constraints_third->periodic = per_constr_third;
     
     rt_constraints *constraints_fifth = (rt_constraints *)malloc(sizeof(rt_constraints));
-    struct periodic_constraints per_constr_fifth = {(500000000), (5000000)};
+    struct periodic_constraints per_constr_fifth = {(5000000), (500000)};
     constraints_fifth->periodic = per_constr_fifth;
     
     rt_constraints *constraints_six = (rt_constraints *)malloc(sizeof(rt_constraints));
@@ -1274,7 +1282,7 @@ void nk_rt_test()
     nk_thread_start((nk_thread_fun_t)test_real_time, (void *)second, NULL, 0, 0, &s, my_cpu_id(), PERIODIC, constraints_second, 0);
     nk_thread_start((nk_thread_fun_t)test_real_time, (void *)third, NULL, 0, 0, &t, my_cpu_id(), PERIODIC, constraints_third, 0);
     nk_thread_start((nk_thread_fun_t)test_real_time, (void *)five, NULL, 0, 0, &v, my_cpu_id(), PERIODIC, constraints_fifth, 0);
-    nk_thread_start((nk_thread_fun_t)test_real_time, (void *)six, NULL, 0, 0, &w, my_cpu_id(), PERIODIC, constraints_six, 0);
+	nk_thread_start((nk_thread_fun_t)test_real_time, (void *)six, NULL, 0, 0, &w, my_cpu_id(), PERIODIC, constraints_six, 0);
     nk_thread_start((nk_thread_fun_t)test_real_time, (void *)seven, NULL, 0, 0, &x, my_cpu_id(), PERIODIC, constraints_seven, 0);
     nk_thread_start((nk_thread_fun_t)test_real_time, (void *)fourth, NULL, 0, 0, &u, my_cpu_id(), APERIODIC, constraints_fourth, 0);
     nk_thread_start((nk_thread_fun_t)test_real_time, (void *)eight, NULL, 0, 0, &y, my_cpu_id(), PERIODIC, constraints_eighth, 0);	
