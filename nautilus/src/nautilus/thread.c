@@ -815,8 +815,8 @@ nk_thread_destroy (nk_thread_id_t t)
     SCHED_DEBUG("Destroying thread (%p, tid=%lu)\n", (void*)thethread, thethread->tid);
 
     #ifdef NAUT_CONFIG_USE_RT_SCHEDULER
-        rt_thread *t = ((nk_thread_t *)t)->rt_thread;
-        rt_thread_exit(t);
+        rt_thread *rt = ((nk_thread_t *)t)->rt_thread;
+        rt_thread_exit(rt);
         while (rt->status != REMOVED);
         free(rt->constraints);
         free(rt);
@@ -902,9 +902,9 @@ out:
     rt_thread_exit(rt);
     while (rt->status != REMOVED);
     struct sys_info *sys = per_cpu_get(system);
-    rt_scheduler *sched = sys->cpus[my_cpu_id()];
-    rt>status = SLEEPING;
-    enqueue_thread(sched->sleeping, cur->rt_thread);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()]->rt_sched;
+    rt->status = SLEEPING;
+    enqueue_thread(sched->sleeping, rt);
 
     return 0;
 }
@@ -982,7 +982,7 @@ nk_wait (nk_thread_id_t t)
     ASSERT(!irqs_enabled());
 #else
     struct sys_info *sys = per_cpu_get(system);
-    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt_scheduler *sched = sys->cpus[my_cpu_id()]->rt_sched;
     rt_thread_exit(cur->rt_thread);
     while (cur->rt_thread->status != REMOVED);
     cur->rt_thread->status = SLEEPING;
@@ -1039,15 +1039,17 @@ nk_yield (void)
 #else
 {
     struct sys_info *sys = per_cpu_get(system);
-    rt_scheduler *sched = sys->cpus[my_cpu_id()];
-    rt_thread_exit(cur->rt_thread);
-    while (cur->rt_thread->status != REMOVED);
-    if (cur->rt_thread->type == APERIODIC) {
-        cur->rt_thread->type = ADMITTED;
-        enqueue_thread(sched->aperiodic, cur->rt_thread);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()]->rt_sched;
+    nk_thread_t * me = get_cur_thread();
+    rt_thread *rt = me->rt_thread;
+    rt_thread_exit(rt);
+    while (rt->status != REMOVED);
+    if (rt->type == APERIODIC) {
+        rt->type = ADMITTED;
+        enqueue_thread(sched->aperiodic, rt);
     } else {        
-        cur->rt_thread->type = ARRIVED;
-        enqueue_thread(sched->arrival, cur->rt_thread);
+        rt->type = ARRIVED;
+        enqueue_thread(sched->arrival, rt);
     }
 
 }
@@ -1077,9 +1079,10 @@ nk_set_thread_fork_output (void * result)
  *
  */
 
-#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
+
 int
 nk_thread_queue_sleep (nk_thread_queue_t * q)
+#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
 {
     nk_thread_t * t = get_cur_thread();
     enqueue_thread_on_waitq(t, q);
@@ -1092,9 +1095,8 @@ nk_thread_queue_sleep (nk_thread_queue_t * q)
     return 0;
 }
 #else 
-int nk_thread_queue_sleep (rt_queue *q) 
 {
-
+    return 0;
 }
 #endif 
 
@@ -1159,8 +1161,8 @@ out:
 #else
 {
     struct sys_info *sys = per_cpu_get(system);
-    rt_scheduler *sched = sys->cpus[my_cpu_id()];
-    rt_thread *woke = dequeue_thread(shed->sleeping);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()]->rt_sched;
+    rt_thread *woke = dequeue_thread(sched->sleeping);
 
     if (woke != NULL) {
         if (woke->type == APERIODIC) {
@@ -1171,6 +1173,7 @@ out:
             enqueue_thread(sched->arrival, woke);
         }
     }
+    return 0;
 }
 #endif
 
@@ -1230,7 +1233,7 @@ nk_thread_queue_wake_all (nk_thread_queue_t * q)
 #else
 {
     struct sys_info *sys = per_cpu_get(system);
-    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt_scheduler *sched = sys->cpus[my_cpu_id()]->rt_sched;
     rt_thread *woke = dequeue_thread(sched->sleeping);
 
     while (woke != NULL) {
