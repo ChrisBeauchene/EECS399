@@ -781,10 +781,13 @@ nk_thread_exit (void * retval)
 }
 #else
 {
-    rt_thread *rt = ((nk_thread_t *)t)->rt_thread;
+    nk_thread_t * me = get_cur_thread()
+    rt_thread *rt = me->rt_thread;
     rt_thread_exit(rt);
     while (rt->status != REMOVED);
-
+    free(rt->constraints);
+    free(rt);
+    nk_schedule();
 }
 #endif
 
