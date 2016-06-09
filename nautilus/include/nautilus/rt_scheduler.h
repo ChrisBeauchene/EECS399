@@ -107,7 +107,7 @@ void rt_start(uint64_t sched_slice_time, uint64_t sched_period);
 void enqueue_thread(rt_queue *queue, rt_thread *thread);
 rt_thread* dequeue_thread(rt_queue *queue);
 rt_thread* remove_thread(rt_thread *thread);
-int rt_thread_exit(rt_thread *thread);
+void rt_thread_exit(rt_thread *thread);
 void rt_thread_free(rt_thread *thread);
 void rt_thread_dump(rt_thread *thread);
 

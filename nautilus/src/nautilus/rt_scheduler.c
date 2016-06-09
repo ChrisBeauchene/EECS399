@@ -163,7 +163,7 @@ rt_scheduler* rt_scheduler_init(rt_thread *main_thread)
     rt_queue *arrival = (rt_queue *)malloc(sizeof(rt_queue) + MAX_QUEUE * sizeof(rt_thread *));
     rt_queue *sleeping = (rt_queue *)malloc(sizeof(rt_queue) + MAX_QUEUE * sizeof(rt_thread *));
     rt_queue *exited = (rt_queue *)malloc(sizeof(rt_queue) + MAX_QUEUE * sizeof(rt_thread *));
-
+    tsc_info *info = (tsc_info *)malloc(sizeof(tsc_info));
 	main_thread->status = ADMITTED;
 	scheduler->main_thread = main_thread;
 
