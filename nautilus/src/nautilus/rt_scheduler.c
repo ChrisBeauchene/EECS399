@@ -182,7 +182,6 @@ rt_scheduler* rt_scheduler_init(rt_thread *main_thread)
 		ZERO_QUEUE(arrival);
         ZERO_QUEUE(sleeping);
         ZERO_QUEUE(exited);
-        ZERO_QUEUE(trash);
 		
         runnable->type = RUNNABLE_QUEUE;
         runnable->size = 0;
@@ -375,7 +374,7 @@ rt_thread* remove_thread(rt_thread *thread) {
         rt_thread *target_thread, *last;
         int i = 0, target_index = queue->size, now, child;
         for (i = 0; i < queue->size; i++) {
-            if (thread = queue->threads[i]) {
+            if (thread == queue->threads[i]) {
                 target_index = i;
                 break;
             }
@@ -422,7 +421,7 @@ rt_thread* remove_thread(rt_thread *thread) {
         rt_thread *target_thread, *last;
         int i = 0, target_index = queue->size, now, child;
         for (i = 0; i < queue->size; i++) {
-            if (thread = queue->threads[i]) {
+            if (thread == queue->threads[i]) {
                 target_index = i;
                 break;
             }
@@ -469,7 +468,7 @@ rt_thread* remove_thread(rt_thread *thread) {
         rt_thread *target_thread, *last;
         int i = 0, target_index = queue->size, now, child;
         for (i = 0; i < queue->size; i++) {
-            if (thread = queue->threads[i]) {
+            if (thread == queue->threads[i]) {
                 target_index = i;
                 break;
             }
@@ -609,7 +608,7 @@ rt_thread* dequeue_thread(rt_queue *queue)
         queue->threads[now] = last;
 
         if (min->status == TOBE_REMOVED) {
-            min->status == REMOVED;
+            min->status = REMOVED;
             return dequeue_thread(queue);
         }
 
@@ -646,7 +645,7 @@ rt_thread* dequeue_thread(rt_queue *queue)
         queue->threads[now] = last;
 
         if (min->status == TOBE_REMOVED) {
-            min->status == REMOVED;
+            min->status = REMOVED;
             return dequeue_thread(queue);
         }
 
@@ -683,7 +682,7 @@ rt_thread* dequeue_thread(rt_queue *queue)
         queue->threads[now] = last;
 
         if (min->status == TOBE_REMOVED) {
-            min->status == REMOVED;
+            min->status = REMOVED;
             return dequeue_thread(queue);
         }
 
@@ -702,7 +701,7 @@ rt_thread* dequeue_thread(rt_queue *queue)
 
         rt_thread *t = queue->threads[pos];
         if (t->status == TOBE_REMOVED) {
-            t->status == REMOVED;
+            t->status = REMOVED;
             return dequeue_thread(queue);
         }
 
@@ -1253,7 +1252,7 @@ static void sched_sim(void *scheduler) {
             if (d->status != REMOVED && e == NULL) {
                 RT_SCHED_ERROR("REMOVING THREAD INCORRECTLY.\n");
             } else {
-                d->status == REMOVED;
+                d->status = REMOVED;
             }
         }
 
