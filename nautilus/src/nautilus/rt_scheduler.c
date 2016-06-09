@@ -1203,7 +1203,7 @@ static void test_real_time(void *in)
     while (1)
     {
 		printk("Inside thread %d\n", *(int *)in);
-        udelay(10000000);
+        udelay(100000);
     }
 }
 
@@ -1224,10 +1224,12 @@ static void sched_sim(void *scheduler) {
     constraints_fifth->periodic = per_constr_fifth;
 	
     nk_thread_start_sim((nk_thread_fun_t)test_real_time, (void *)five, NULL, 0, 0, &v, my_cpu_id(), PERIODIC, constraints_fifth, 0);
+
 	while (1) {
 		printk("Running the scheduler on core %d\n", my_cpu_id());
 		udelay(100000);
 	}
+
 	rt_simulator *sim = init_simulator();
 
     struct sys_info *sys = per_cpu_get(system);

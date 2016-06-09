@@ -1986,6 +1986,7 @@ nk_thread_start_sim (nk_thread_fun_t fun,
     if (sys->cpus[cpu]->rt_sched) {
         enqueue_thread(sys->cpus[cpu]->rt_sched->runnable, rt);
     }
+    
     nk_schedule();
 #else
     nk_enqueue_thread_on_runq(newthread, cpu);
