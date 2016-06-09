@@ -781,8 +781,8 @@ nk_thread_exit (void * retval)
 }
 #else
 {
-    rt_thread *t = ((nk_thread_t *)t)->rt_thread;
-    rt_thread_exit(t);
+    rt_thread *rt = ((nk_thread_t *)t)->rt_thread;
+    rt_thread_exit(rt);
     while (rt->status != REMOVED);
 
 }
