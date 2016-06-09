@@ -44,8 +44,14 @@ typedef union rt_constraints {
 } rt_constraints;
 
 typedef enum { APERIODIC = 0, SPORADIC = 1, PERIODIC = 2} rt_type;
-typedef enum {RUNNABLE_QUEUE = 0, PENDING_QUEUE = 1, APERIODIC_QUEUE = 2, ARRIVAL_QUEUE = 3, WAITING_QUEUE = 4} queue_type;
-typedef enum { ARRIVED = 0, ADMITTED = 1, WAITING = 2, RUNNING = 3} rt_status;
+
+typedef enum {  RUNNABLE_QUEUE = 0, PENDING_QUEUE = 1, 
+                APERIODIC_QUEUE = 2, ARRIVAL_QUEUE = 3, 
+                SLEEPING_QUEUE = 4, EXITED_QUEUE = 5} queue_type;
+
+typedef enum {  ARRIVED = 0, ADMITTED = 1, 
+                RUNNING = 2, TOBE_REMOVED = 3, REMOVED = 4, 
+                SLEEPING = 5} rt_status;
 
 typedef struct rt_thread {
     rt_type type;
@@ -58,6 +64,7 @@ typedef struct rt_thread {
     uint64_t exit_time;
     struct nk_thread *thread;
 } rt_thread;
+
 
 rt_thread* rt_thread_init(int type,
                           rt_constraints *constraints,
@@ -84,7 +91,10 @@ typedef struct rt_scheduler {
     rt_queue *pending;
     rt_queue *aperiodic;
     rt_queue *arrival;
-    rt_queue *waiting;
+    rt_queue *exited;
+
+    rt_queue *sleeping;
+
     rt_thread *main_thread;
     uint64_t run_time;
     tsc_info *tsc;
@@ -96,7 +106,9 @@ void rt_start(uint64_t sched_slice_time, uint64_t sched_period);
 
 void enqueue_thread(rt_queue *queue, rt_thread *thread);
 rt_thread* dequeue_thread(rt_queue *queue);
-
+rt_thread* remove_thread(rt_thread *thread);
+int rt_thread_exit(rt_thread *thread);
+void rt_thread_free(rt_thread *thread);
 void rt_thread_dump(rt_thread *thread);
 
 // Time

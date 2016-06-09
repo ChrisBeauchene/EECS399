@@ -91,9 +91,7 @@ nk_thread_queue_t*
 nk_thread_queue_create (void)
 {
     nk_thread_queue_t * q = NULL;
-    
     q = nk_queue_create();
-    
     if (!q) {
         ERROR_PRINT("Could not allocate thread queue\n");
         return NULL;
@@ -741,8 +739,16 @@ nk_wake_waiters (void)
  * any destructors for thread local storage
  *
  */
+
+  /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 void
 nk_thread_exit (void * retval)
+#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
 {
     nk_thread_t * me = get_cur_thread();
     
@@ -773,7 +779,14 @@ nk_thread_exit (void * retval)
     /* we should never get here! */
     panic("Should never get here!\n");
 }
+#else
+{
+    rt_thread *t = ((nk_thread_t *)t)->rt_thread;
+    rt_thread_exit(t);
+    while (rt->status != REMOVED);
 
+}
+#endif
 
 /*
  * nk_thread_destroy
@@ -784,15 +797,29 @@ nk_thread_exit (void * retval)
  * @t: the thread to destroy
  *
  */
+
+  /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 void
 nk_thread_destroy (nk_thread_id_t t)
 {
     nk_thread_t * thethread = (nk_thread_t*)t;
     
     SCHED_DEBUG("Destroying thread (%p, tid=%lu)\n", (void*)thethread, thethread->tid);
-    
+
+    #ifdef NAUT_CONFIG_USE_RT_SCHEDULER
+        rt_thread *t = ((nk_thread_t *)t)->rt_thread;
+        rt_thread_exit(t);
+        while (rt->status != REMOVED);
+        free(rt->constraints);
+        free(rt);
+    #endif
+
     ASSERT(!irqs_enabled());
-    
     nk_dequeue_thread_from_runq(thethread);
     dequeue_thread_from_tlist(thethread);
     
@@ -820,6 +847,13 @@ nk_thread_destroy (nk_thread_id_t t)
  * returns  -EINVAL on error, 0 on success
  *
  */
+
+  /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 int
 nk_join (nk_thread_id_t t, void ** retval)
 #ifndef NAUT_CONFIG_USE_RT_SCHEDULER
@@ -860,6 +894,15 @@ out:
 }
 #else
 {
+    nk_thread_t *thethread = (nk_thread_t*)t;
+    rt_thread *rt = thethread->rt_thread;
+    rt_thread_exit(rt);
+    while (rt->status != REMOVED);
+    struct sys_info *sys = per_cpu_get(system);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt>status = SLEEPING;
+    enqueue_thread(sched->sleeping, cur->rt_thread);
+
     return 0;
 }
 #endif
@@ -878,6 +921,9 @@ out:
  *  returns -EINVAL on error, 0 on success
  *
  */
+
+
+// DONT USE WITH REAL-TIME
 int
 nk_join_all_children (int (*func)(void * res))
 {
@@ -897,7 +943,7 @@ nk_join_all_children (int (*func)(void * res))
         
         if (func) {
             if (func(res) < 0) {
-                ERROR_PRINT("Could not invoke destructo for child thread (t=%p)\n", elm);
+                ERROR_PRINT("Could not invoke destructor for child thread (t=%p)\n", elm);
                 ret = -1;
                 continue;
             }
@@ -917,9 +963,9 @@ nk_join_all_children (int (*func)(void * res))
  * @t : the thread to wait on
  *
  */
+
 void
 nk_wait (nk_thread_id_t t)
-#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
 {
     nk_thread_t * cur    = get_cur_thread();
     nk_thread_t * waiton = (nk_thread_t*)t;
@@ -928,15 +974,25 @@ nk_wait (nk_thread_id_t t)
     
     /* make sure we're not putting ourselves on our
      * own waitq */
+
+#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
     ASSERT(!irqs_enabled());
+#else
+    struct sys_info *sys = per_cpu_get(system);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt_thread_exit(cur->rt_thread);
+    while (cur->rt_thread->status != REMOVED);
+    cur->rt_thread->status = SLEEPING;
+    enqueue_thread(sched->sleeping, cur->rt_thread);
+#endif
+
     ASSERT(wq != cur->waitq);
     
     enqueue_thread_on_waitq(cur, wq);
+
     nk_schedule();
 }
-#else
-{}
-#endif
+
 
 
 /*
@@ -979,14 +1035,18 @@ nk_yield (void)
 }
 #else
 {
+    struct sys_info *sys = per_cpu_get(system);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt_thread_exit(cur->rt_thread);
+    while (cur->rt_thread->status != REMOVED);
+    if (cur->rt_thread->type == APERIODIC) {
+        cur->rt_thread->type = ADMITTED;
+        enqueue_thread(sched->aperiodic, cur->rt_thread);
+    } else {        
+        cur->rt_thread->type = ARRIVED;
+        enqueue_thread(sched->arrival, cur->rt_thread);
+    }
 
-    // Dequeue aperiodic 
-        // Enqueue current queue
-    // Else if hard real-time
-        // Dequeue run queue
-        // enqueue current queue on arrival queue
-    // Switch to new queue
-    // nk_thread_switch()
 }
 #endif
 
@@ -1013,17 +1073,27 @@ nk_set_thread_fork_output (void * result)
  * @q: the thread queue to sleep on
  *
  */
+
+#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
 int
 nk_thread_queue_sleep (nk_thread_queue_t * q)
 {
     nk_thread_t * t = get_cur_thread();
     enqueue_thread_on_waitq(t, q);
-    //cli();
+
+
     uint8_t flags = irq_disable_save();
     nk_schedule();
     irq_enable_restore(flags);
+
     return 0;
 }
+#else 
+int nk_thread_queue_sleep (rt_queue *q) 
+{
+
+}
+#endif 
 
 
 /*
@@ -1036,8 +1106,16 @@ nk_thread_queue_sleep (nk_thread_queue_t * q)
  * returns -EINVAL on error, 0 on success
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 int
 nk_thread_queue_wake_one (nk_thread_queue_t * q)
+#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
 {
     nk_queue_entry_t * elm = NULL;
     nk_thread_t * t = NULL;
@@ -1075,6 +1153,23 @@ out:
     irq_enable_restore(flags);
     return 0;
 }
+#else
+{
+    struct sys_info *sys = per_cpu_get(system);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt_thread *woke = dequeue_thread(shed->sleeping);
+
+    if (woke != NULL) {
+        if (woke->type == APERIODIC) {
+            woke->status = ADMITTED;
+            enqueue_thread(sched->aperiodic, woke);
+        } else {
+            woke->status = ARRIVED;
+            enqueue_thread(sched->arrival, woke);
+        }
+    }
+}
+#endif
 
 
 /*
@@ -1087,8 +1182,16 @@ out:
  * returns -EINVAL on error, 0 on success
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 int
 nk_thread_queue_wake_all (nk_thread_queue_t * q)
+#ifndef NAUT_CONFIG_USE_RT_SCHEDULER
 {
     nk_queue_entry_t * elm = NULL;
     nk_thread_t * t = NULL;
@@ -1121,6 +1224,27 @@ nk_thread_queue_wake_all (nk_thread_queue_t * q)
     spin_unlock_irq_restore(&q->lock, flags);
     return 0;
 }
+#else
+{
+    struct sys_info *sys = per_cpu_get(system);
+    rt_scheduler *sched = sys->cpus[my_cpu_id()];
+    rt_thread *woke = dequeue_thread(sched->sleeping);
+
+    while (woke != NULL) {
+        if (woke->type == APERIODIC) {
+            woke->status = ADMITTED;
+            enqueue_thread(sched->aperiodic, woke);
+        } else {
+            woke->status = ARRIVED;
+            enqueue_thread(sched->arrival, woke);
+        }
+        woke = dequeue_thread(sched->sleeping);
+    }
+
+    return 0;
+}
+#endif
+
 
 
 /*
@@ -1135,6 +1259,14 @@ nk_thread_queue_wake_all (nk_thread_queue_t * q)
  * returns -EAGAIN on error, 0 on success
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 int
 nk_tls_key_create (nk_tls_key_t * key, void (*destructor)(void*))
 {
@@ -1166,6 +1298,14 @@ nk_tls_key_create (nk_tls_key_t * key, void (*destructor)(void*))
  * returns -EINVAL on error, 0 on success
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 int
 nk_tls_key_delete (nk_tls_key_t key)
 {
@@ -1193,6 +1333,13 @@ nk_tls_key_delete (nk_tls_key_t key)
  * returns NULL on error, the value otherwise
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 void*
 nk_tls_get (nk_tls_key_t key)
 {
@@ -1216,6 +1363,14 @@ nk_tls_get (nk_tls_key_t key)
  * returns -EINVAL on error, 0 on success
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 int
 nk_tls_set (nk_tls_key_t key, const void * val)
 {
@@ -1240,6 +1395,14 @@ nk_tls_set (nk_tls_key_t key, const void * val)
  * running thread
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 nk_thread_id_t
 nk_get_tid (void)
 {
@@ -1254,6 +1417,13 @@ nk_get_tid (void)
  * get this thread's parent tid
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 nk_thread_id_t
 nk_get_parent_tid (void)
 {
@@ -1286,6 +1456,14 @@ nk_get_parent_tid (void)
  *
  * On success, pareant gets child's tid, child gets 0
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 nk_thread_id_t
 __thread_fork (void)
 {
@@ -1391,6 +1569,13 @@ __thread_fork (void)
 }
 
 
+/*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 nk_thread_t*
 nk_need_resched (void)
 #ifndef NAUT_CONFIG_USE_RT_SCHEDULER
@@ -1432,6 +1617,13 @@ nk_need_resched (void)
  * pick a thread to run
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 void
 nk_schedule (void)
 #ifndef NAUT_CONFIG_USE_RT_SCHEDULER
@@ -1491,6 +1683,13 @@ nk_schedule (void)
  * scheduler init routine for APs once they
  * have booted up
   */
+
+/*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
 int
 nk_sched_init_ap (void)
 {
@@ -1576,6 +1775,14 @@ out_err:
  * entry point into the scheduler at bootup
  *
  */
+
+ /*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+
+
 int
 nk_sched_init (void)
 {
@@ -1667,7 +1874,11 @@ out_err0:
 }
 
 
-
+/*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
 
 static void
 tls_dummy (void * in, void ** out)
@@ -1723,6 +1934,12 @@ out_err:
     free(keys);
 }
 
+/*******************************************************
+********************************************************
+**************** Real-Time Enabled *********************
+********************************************************
+*******************************************************/
+#ifdef NAUT_CONFIG_USE_RT_SCHEDULER
 int
 nk_thread_start_sim (nk_thread_fun_t fun,
                  void *input,
@@ -1788,6 +2005,7 @@ nk_thread_start_sim (nk_thread_fun_t fun,
     
     return 0;
 }
+#endif
 
 
 
