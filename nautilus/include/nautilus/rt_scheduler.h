@@ -45,7 +45,7 @@ typedef union rt_constraints {
 
 typedef enum { APERIODIC = 0, SPORADIC = 1, PERIODIC = 2} rt_type;
 typedef enum {RUNNABLE_QUEUE = 0, PENDING_QUEUE = 1, APERIODIC_QUEUE = 2, ARRIVAL_QUEUE = 3, WAITING_QUEUE = 4} queue_type;
-typedef enum { ARRIVED = 0, ADMITTED = 1, WAITING = 2} rt_status;
+typedef enum { ARRIVED = 0, ADMITTED = 1, WAITING = 2, RUNNING = 3} rt_status;
 
 typedef struct rt_thread {
     rt_type type;

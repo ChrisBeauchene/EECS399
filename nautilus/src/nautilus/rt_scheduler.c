@@ -56,6 +56,7 @@
 #define ARRIVED 0
 #define ADMITTED 1
 #define WAITING 2
+#define RUNNING 3
 
 // Queue types
 #define RUNNABLE_QUEUE 0
@@ -168,7 +169,7 @@ rt_scheduler* rt_scheduler_init(rt_thread *main_thread)
     rt_queue *arrival = (rt_queue *)malloc(sizeof(rt_queue) + MAX_QUEUE * sizeof(rt_thread *));
     rt_queue *waiting = (rt_queue *)malloc(sizeof(rt_queue) + MAX_QUEUE * sizeof(rt_thread *));
     tsc_info *info = (tsc_info *)malloc(sizeof(tsc_info));
-
+	main_thread->status = ADMITTED;
 	scheduler->main_thread = main_thread;
 
     if (!scheduler || !runnable || ! pending || !aperiodic || !arrival || !waiting || !info) {
@@ -313,6 +314,7 @@ void enqueue_thread(rt_queue *queue, rt_thread *thread)
         }
 
         thread->q_type = ARRIVAL_QUEUE;
+		thread->status = ARRIVED;
         queue->threads[pos] = thread;
     } else if (queue->type == WAITING_QUEUE) 
     {
@@ -328,10 +330,21 @@ void enqueue_thread(rt_queue *queue, rt_thread *thread)
             queue->tail = 0;
         }
         thread->q_type = WAITING_QUEUE;
+		thread->status = WAITING;
         queue->threads[pos] = thread;
     }
 }
 
+int remove_thread(rt_thread *thread) {
+	queue_type type = thread->q_type;
+
+	if (type == RUNNABLE_QUEUE) {
+		if (queue->size < 1) {
+			RT_SCHED_ERROR("RUNNABLE QUEUE IS EMPTY. CAN'T REMOVE.\n");
+		}
+		
+	}
+}
 rt_thread* dequeue_thread(rt_queue *queue)
 {
     if (queue->type == RUNNABLE_QUEUE)
@@ -617,7 +630,6 @@ void rt_thread_dump(rt_thread *thread)
 static void set_timer(rt_scheduler *scheduler, rt_thread *current_thread, uint64_t end_time, uint64_t slack)
 {
     scheduler->tsc->start_time = cur_time();
-    end_time = cur_time();
     struct sys_info *sys = per_cpu_get(system);
     struct apic_dev *apic = sys->cpus[my_cpu_id()]->apic;
     if (scheduler->pending->size > 0 && current_thread) {
