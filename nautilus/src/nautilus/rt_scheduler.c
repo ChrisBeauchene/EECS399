@@ -1203,7 +1203,7 @@ static void test_real_time(void *in)
     while (1)
     {
 		printk("Inside thread %d\n", *(int *)in);
-        udelay(100000);
+        udelay(1000);
     }
 }
 
@@ -1227,7 +1227,7 @@ static void sched_sim(void *scheduler) {
 
 	while (1) {
 		printk("Running the scheduler on core %d\n", my_cpu_id());
-		udelay(100000);
+		udelay(1000);
 	}
 
 	rt_simulator *sim = init_simulator();
